@@ -1,4 +1,4 @@
-module github.com/smallnest/chanx
+module github.com/stonever/chanx
 
 go 1.18
 

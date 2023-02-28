@@ -1,19 +1,25 @@
 package chanx
 
 import (
+	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestMakeRingChan(t *testing.T) {
+func TestMakeFixedRingChan(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	size := 10
-	ch := NewRingChan[int](size)
+	ch := NewFixedRingChan[int](ctx, size)
 	assert.Equal(t, 0, ch.Len())
 
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 100; i++ {
 		ch.In <- i
 	}
 	assert.Equal(t, size, ch.Len())
@@ -21,7 +27,7 @@ func TestMakeRingChan(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		select {
 		case out := <-ch.Out:
-			assert.Equal(t, i+2, out)
+			assert.Equal(t, i+90, out)
 		}
 	}
 	time.Sleep(time.Millisecond)
@@ -31,8 +37,12 @@ func TestMakeRingChan(t *testing.T) {
 
 }
 func TestRWRingChan(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	size := 10
-	ch := NewRingChan[int](size)
+	ch := NewFixedRingChan[int](ctx, size)
 	assert.Equal(t, 0, ch.Len())
 	var wg sync.WaitGroup
 	wg.Add(2)

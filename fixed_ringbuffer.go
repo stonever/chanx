@@ -1,4 +1,4 @@
-package ringbuffer
+package chanx
 
 import (
 	"errors"
@@ -7,32 +7,32 @@ import (
 
 var (
 	ErrIsFull       = errors.New("ringbuffer is full")
-	ErrIsEmpty      = errors.New("ringbuffer is empty")
 	ErrAccuqireLock = errors.New("no lock to accquire")
 )
 
-// RingBuffer is a circular buffer that implement io.ReaderWriter interface.
-type RingBuffer[T any] struct {
+// FixedRingBuffer is a circular buffer that has fixed size.
+type FixedRingBuffer[T any] struct {
 	buf       []T
 	size      int
 	r         int // next position to read
 	w         int // next position to write
 	isFull    bool
 	mu        sync.Mutex
-	coverable bool
+	coverable bool // if coverable, writing exceed fixed size will cover old element
 }
 
-// New returns a new RingBuffer whose buffer has the given size.
-func New[T any](size int, coverable bool) *RingBuffer[T] {
-	return &RingBuffer[T]{
+// NewFixedRingBuffer returns a new RingBuffer whose buffer has the given size.
+func NewFixedRingBuffer[T any](size int, coverable bool) *FixedRingBuffer[T] {
+	return &FixedRingBuffer[T]{
 		buf:       make([]T, size),
 		size:      size,
 		coverable: coverable,
 	}
 }
 
-// ReadByte reads and returns the next byte from the input or ErrIsEmpty.
-func (r *RingBuffer[T]) Read() (t T, err error) {
+// Read reads and returns the next value from the buffer or ErrIsEmpty.
+// Will move the data out
+func (r *FixedRingBuffer[T]) Read() (t T, err error) {
 	r.mu.Lock()
 	if r.w == r.r && !r.isFull {
 		r.mu.Unlock()
@@ -48,7 +48,7 @@ func (r *RingBuffer[T]) Read() (t T, err error) {
 	r.mu.Unlock()
 	return t, err
 }
-func (r *RingBuffer[T]) Peek() (t T, err error) {
+func (r *FixedRingBuffer[T]) Peek() (t T, err error) {
 	r.mu.Lock()
 	if r.w == r.r && !r.isFull {
 		r.mu.Unlock()
@@ -61,16 +61,16 @@ func (r *RingBuffer[T]) Peek() (t T, err error) {
 }
 
 // WriteByte writes one byte into buffer, and returns ErrIsFull if buffer is full.
-func (r *RingBuffer[T]) Write(t T) error {
+func (r *FixedRingBuffer[T]) Write(t T) error {
 	r.mu.Lock()
 	err := r.write(t)
 	r.mu.Unlock()
 	return err
 }
 
-// TryWriteByte writes one byte into buffer without blocking.
+// TryWrite writes one byte into buffer without blocking.
 // If it has not succeeded to accquire the lock, it return ErrAccuqireLock.
-func (r *RingBuffer[T]) TryWrite(t T) error {
+func (r *FixedRingBuffer[T]) TryWrite(t T) error {
 	ok := r.mu.TryLock()
 	if !ok {
 		return ErrAccuqireLock
@@ -81,7 +81,7 @@ func (r *RingBuffer[T]) TryWrite(t T) error {
 	return err
 }
 
-func (r *RingBuffer[T]) write(t T) error {
+func (r *FixedRingBuffer[T]) write(t T) error {
 	if r.w == r.r && r.isFull {
 		if !r.coverable {
 			return ErrIsFull
@@ -104,7 +104,7 @@ func (r *RingBuffer[T]) write(t T) error {
 }
 
 // Length return the length of available read bytes.
-func (r *RingBuffer[T]) Length() int {
+func (r *FixedRingBuffer[T]) Length() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -123,12 +123,12 @@ func (r *RingBuffer[T]) Length() int {
 }
 
 // Capacity returns the size of the underlying buffer.
-func (r *RingBuffer[T]) Capacity() int {
+func (r *FixedRingBuffer[T]) Capacity() int {
 	return r.size
 }
 
 // Free returns the length of available bytes to write.
-func (r *RingBuffer[T]) Free() int {
+func (r *FixedRingBuffer[T]) Free() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -147,7 +147,7 @@ func (r *RingBuffer[T]) Free() int {
 }
 
 // All returns all available read bytes. It does not move the read pointer and only copy the available data.
-func (r *RingBuffer[T]) All() []T {
+func (r *FixedRingBuffer[T]) All() []T {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -183,7 +183,7 @@ func (r *RingBuffer[T]) All() []T {
 }
 
 // IsFull returns this ringbuffer is full.
-func (r *RingBuffer[T]) IsFull() bool {
+func (r *FixedRingBuffer[T]) IsFull() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -191,7 +191,7 @@ func (r *RingBuffer[T]) IsFull() bool {
 }
 
 // IsEmpty returns this ringbuffer is empty.
-func (r *RingBuffer[T]) IsEmpty() bool {
+func (r *FixedRingBuffer[T]) IsEmpty() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -199,7 +199,7 @@ func (r *RingBuffer[T]) IsEmpty() bool {
 }
 
 // Reset the read pointer and writer pointer to zero.
-func (r *RingBuffer[T]) Reset() {
+func (r *FixedRingBuffer[T]) Reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

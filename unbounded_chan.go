@@ -26,7 +26,7 @@ func (c UnboundedChan[T]) Len() int {
 // BufLen returns len of the buffer.
 // It is not accurate and only for your evaluating approximate number of elements in this chan,
 // see https://github.com/smallnest/chanx/issues/7.
-func (c UnboundedChan[T]) BufLen() int {
+func (c *UnboundedChan[T]) BufLen() int {
 	return int(atomic.LoadInt64(&c.bufCount))
 }
 

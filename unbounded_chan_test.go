@@ -151,3 +151,21 @@ func TestGetDataWithGoleak(t *testing.T) {
 		ch.In <- int64(i)
 	}
 }
+
+// TestGetDataWithoutDataRace: go test -race -v -run TestGetDataWithoutDataRace
+func TestGetDataWithoutDataRace(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := NewUnboundedChan[int64](ctx, 10)
+	go func() {
+		for {
+			_ = ch.BufLen()
+		}
+	}()
+	go func() {
+		for {
+			ch.In <- 0
+		}
+	}()
+	time.Sleep(time.Second * 3)
+}
